@@ -54,9 +54,9 @@ export const InspectionReportHeader: React.FC<InspectionReportHeaderProps> = ({
           </div>
           <div>
             <div className="text-xs font-mono font-bold tracking-wider text-slate-800 uppercase flex items-center gap-1.5">
-              <span>BharatLabel AI</span>
+              <span>BHARATLABEL COMPLIANCE</span>
               <span className="text-slate-400">•</span>
-              <span className="text-slate-600 font-sans font-normal">Compliance Inspection System</span>
+              <span className="text-slate-600 font-sans font-normal">Inspection Platform</span>
             </div>
             <div className="text-[11px] text-slate-500 font-mono">
               Legal Metrology Act, 2009 &amp; Packaged Commodities Rules, 2011

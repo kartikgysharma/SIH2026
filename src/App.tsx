@@ -296,17 +296,17 @@ export default function App() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1
-                    className="text-base sm:text-lg font-extrabold tracking-tight text-slate-950 cursor-pointer"
+                    className="text-base sm:text-lg font-extrabold tracking-tight text-slate-950 cursor-pointer flex items-center gap-1.5"
                     onClick={() => setDetailFindingId(null)}
                   >
-                    BharatLabel <span className="text-[#0B2545] font-black">AI</span>
+                    <span>BHARATLABEL</span>
+                    <span className="text-[#0B2545] font-black text-xs sm:text-sm tracking-wide bg-blue-50 text-blue-900 px-1.5 py-0.5 rounded border border-blue-200">
+                      COMPLIANCE
+                    </span>
                   </h1>
-                  <span className="hidden sm:inline-block font-mono text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-300">
-                    Govt &amp; Enterprise Compliance
-                  </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium tracking-tight hidden md:block">
-                  Understand the label. Validate the requirements. Explain the findings.
+                  AI-Powered Packaged Commodity Compliance &amp; Inspection Platform
                 </p>
               </div>
             </div>

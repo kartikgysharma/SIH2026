@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Button } from '../design-system/Button';
 import { FileDropzone } from '../design-system/Input';
 import { InspectionSummary } from '../types';
+import { optimizeImageForAnalysis } from '../utils/imageOptimizer';
 import {
   Scan,
   CheckCircle2,
@@ -389,6 +390,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     ? 'Image Quality Insufficient'
                     : errorCode === 'API_KEY_ERROR'
                     ? 'Gemini API Key Configuration Required'
+                    : errorCode === 'API_ROUTE_NOT_FOUND'
+                    ? 'Backend API Route Not Found'
                     : errorCode === 'SERVICE_UNAVAILABLE'
                     ? 'Service Temporarily Busy'
                     : 'Label Analysis Unsuccessful'}
@@ -399,6 +402,21 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   </p>
                 </div>
               </div>
+
+              {errorCode === 'API_KEY_ERROR' && (
+                <div className="max-w-md mx-auto text-xs text-slate-700 space-y-1.5 bg-blue-50/70 p-3.5 rounded border border-blue-200">
+                  <p className="font-semibold text-blue-950 flex items-center gap-1.5">
+                    <Info className="w-4 h-4 text-blue-700" />
+                    How to fix in Vercel:
+                  </p>
+                  <ol className="list-decimal pl-4 space-y-1 text-[11px] text-blue-900 leading-relaxed">
+                    <li>Go to your project on the <strong>Vercel Dashboard</strong>.</li>
+                    <li>Navigate to <strong>Settings</strong> &rarr; <strong>Environment Variables</strong>.</li>
+                    <li>Add <strong>GEMINI_API_KEY</strong> with your Google AI Studio API key value.</li>
+                    <li>Redeploy your project or trigger a new deployment.</li>
+                  </ol>
+                </div>
+              )}
 
               {errorCode === 'SERVICE_UNAVAILABLE' && (
                 <div className="max-w-md mx-auto text-xs text-slate-600 space-y-1 bg-amber-50 p-3 rounded border border-amber-200">
