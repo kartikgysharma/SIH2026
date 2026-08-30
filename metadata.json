@@ -1,0 +1,6 @@
+{
+  "name": "BharatLabel AI",
+  "description": "AI-Powered Packaged Commodity Compliance & Inspection Platform. Understand the label. Validate the requirements. Explain the findings.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
