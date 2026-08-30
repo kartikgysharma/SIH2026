@@ -109,10 +109,30 @@ export interface RawExtractionResult {
 
 let aiClient: GoogleGenAI | null = null;
 
+function getGeminiApiKey(): string {
+  const candidates = [
+    process.env.GEMINI_API_KEY,
+    process.env.GOOGLE_API_KEY,
+    process.env.GOOGLE_GENAI_API_KEY,
+    process.env.VITE_GEMINI_API_KEY,
+    process.env.VITE_GOOGLE_API_KEY,
+    process.env.AI_STUDIO_API_KEY,
+    process.env.API_KEY,
+  ];
+
+  for (const key of candidates) {
+    if (key && typeof key === "string" && key.trim().length > 0) {
+      return key.trim().replace(/^["']|["']$/g, "");
+    }
+  }
+
+  return "";
+}
+
 function getAiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured on the server");
+    throw new Error("GEMINI_API_KEY or GOOGLE_API_KEY is not configured on the server");
   }
   if (!aiClient) {
     aiClient = new GoogleGenAI({

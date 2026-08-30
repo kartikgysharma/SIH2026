@@ -110,13 +110,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     }, 1200);
 
     try {
-      // Convert File to base64 Data URL
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = (err) => reject(err);
-        reader.readAsDataURL(file);
-      });
+      // Optimize image before sending to prevent serverless body size limits on Vercel
+      const optimized = await optimizeImageForAnalysis(file);
+      console.log(`[3] Optimized size: ~${Math.round(optimized.optimizedSizeBytes / 1024)} KB (${optimized.width}x${optimized.height}px)`);
 
       console.log('[4] Image successfully prepared and sent to backend (/api/analyze-label)');
       console.log('[5] Gemini request started...');
@@ -127,24 +123,66 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          image: base64Data,
-          mimeType: file.type || 'image/jpeg',
+          image: optimized.base64Data,
+          mimeType: optimized.mimeType,
           fileName: file.name,
           inspectorName: 'Field Metrology Officer',
           location: 'Field Inspection Unit',
         }),
       });
 
-      const result = await response.json();
+      // Safely check content-type before parsing JSON to prevent "Unexpected token" crashes on 500/HTML pages
+      const contentType = response.headers.get('content-type') || '';
+      let result: any = null;
 
-      if (!response.ok || !result.success) {
+      if (contentType.includes('application/json')) {
+        try {
+          result = await response.json();
+        } catch (jsonErr) {
+          console.error('[Response Parse Error] Failed to parse JSON:', jsonErr);
+        }
+      } else {
+        const rawText = await response.text();
+        console.warn(`[Non-JSON API Response] Status: ${response.status}, Body preview:`, rawText.slice(0, 300));
+        
+        if (stageIntervalRef.current) clearInterval(stageIntervalRef.current);
+
+        let customCode = 'SERVER_ERROR';
+        let customMessage = 'Server returned an unexpected response.';
+
+        if (response.status === 404) {
+          customCode = 'API_ROUTE_NOT_FOUND';
+          customMessage = 'The inspection API route (/api/analyze-label) was not found on this deployment. Please ensure Vercel Serverless Functions are deployed.';
+        } else if (response.status === 413) {
+          customCode = 'PAYLOAD_TOO_LARGE';
+          customMessage = 'The uploaded image exceeds the platform payload limit. Please upload a smaller photo.';
+        } else if (response.status === 401) {
+          customCode = 'API_KEY_ERROR';
+          customMessage = 'GEMINI_API_KEY is missing or invalid in Vercel Project Settings -> Environment Variables.';
+        } else if (response.status === 500) {
+          customCode = 'API_KEY_ERROR';
+          customMessage = 'Server error on Vercel. Please ensure GEMINI_API_KEY is added under Vercel Project Settings -> Environment Variables and redeployed.';
+        } else if (response.status === 504) {
+          customCode = 'GATEWAY_TIMEOUT';
+          customMessage = 'The vision extraction timed out. Please retry with a clear, well-lit photo.';
+        } else {
+          customMessage = `Server error (HTTP ${response.status}). Please check GEMINI_API_KEY in Vercel settings.`;
+        }
+
+        setErrorCode(customCode);
+        setErrorMessage(customMessage);
+        setActiveStep('error');
+        return;
+      }
+
+      if (!response.ok || !result?.success) {
         if (stageIntervalRef.current) clearInterval(stageIntervalRef.current);
         const err = result?.error;
         console.error('[API Error] Backend returned error:', err);
-        setErrorCode(err?.code || 'ANALYSIS_FAILED');
+        setErrorCode(err?.code || (response.status === 401 ? 'API_KEY_ERROR' : 'ANALYSIS_FAILED'));
         setErrorMessage(
           err?.message ||
-            'Unable to analyze this image. Please check image quality and try again.'
+            'Unable to analyze this image. Please check image quality and verify GEMINI_API_KEY in Vercel settings.'
         );
         setActiveStep('error');
         return;
@@ -169,7 +207,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       setErrorCode('NETWORK_ERROR');
       setErrorMessage(
         err?.message ||
-          'Failed to connect to inspection server. Please ensure the server is running and try again.'
+          'Failed to connect to inspection server. Please verify GEMINI_API_KEY in Vercel environment settings and try again.'
       );
       setActiveStep('error');
     }
