@@ -24,6 +24,7 @@ interface DashboardViewProps {
   onViewAllInspections: () => void;
   onViewReviewQueue: () => void;
   onReviewFinding: (inspectionId: string, findingId?: string) => void;
+  onViewRules?: () => void;
   onRetryLoad?: () => void;
 }
 
@@ -38,6 +39,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onViewAllInspections,
   onViewReviewQueue,
   onReviewFinding,
+  onViewRules,
   onRetryLoad,
 }) => {
   const [dateRange, setDateRange] = useState<DashboardDateRange>('all');
@@ -199,6 +201,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }
             }}
             onViewReviewQueue={onViewReviewQueue}
+            onViewRules={onViewRules}
           />
 
           {/* Real Category Breakdown */}

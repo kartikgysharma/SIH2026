@@ -3,6 +3,7 @@ import { Button } from '../design-system/Button';
 import { FileDropzone } from '../design-system/Input';
 import { InspectionSummary } from '../types';
 import { optimizeImageForAnalysis } from '../utils/imageOptimizer';
+import { SAMPLE_INSPECTIONS } from '../data/sampleInspections';
 import {
   Scan,
   CheckCircle2,
@@ -17,6 +18,8 @@ import {
   Camera,
   Check,
   Info,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 
 interface ScanModalProps {
@@ -37,7 +40,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   const [errorCode, setErrorCode] = useState<string>('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
+  const [modalMode, setModalMode] = useState<'upload' | 'samples'>('upload');
   const stageIntervalRef = useRef<any>(null);
+
+  const handleSelectSample = (sample: InspectionSummary) => {
+    onInspectionReady(sample);
+    resetModalState();
+    onClose();
+  };
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -275,71 +285,154 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         {/* Modal Body */}
         <div className="p-6">
           {activeStep === 'select' ? (
-            <div className="space-y-6">
-              {/* Dropzone for user file upload */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-mono font-semibold uppercase text-slate-700 tracking-wider">
-                    Upload Real Product Packaging Label
-                  </label>
-                  <span className="text-[11px] font-mono text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    Live Gemini Vision
-                  </span>
-                </div>
-                <FileDropzone
-                  onFileSelect={handleCustomFileUpload}
-                  label="Drop label photo here or click to browse"
-                  sublabel="Upload JPEG, PNG, or WebP photo of the packaging surface. Real label text will be extracted automatically."
-                />
+            <div className="space-y-5">
+              {/* Mode Switcher Tabs */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setModalMode('upload')}
+                  className={`flex-1 py-1.5 px-3 rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                    modalMode === 'upload'
+                      ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5 text-blue-700" />
+                  <span>Upload or Snap Label Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMode('samples')}
+                  className={`flex-1 py-1.5 px-3 rounded-md transition-all flex items-center justify-center gap-1.5 ${
+                    modalMode === 'samples'
+                      ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Pre-loaded Test Cases ({SAMPLE_INSPECTIONS.length})</span>
+                </button>
               </div>
 
-              {/* Action Buttons: Camera Capture and File Browse */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  className="w-full justify-center"
-                  leftIcon={<Camera className="w-4 h-4 text-blue-700" />}
-                  onClick={() => cameraInputRef.current?.click()}
-                >
-                  Take Photo with Camera
-                </Button>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full justify-center"
-                  leftIcon={<Upload className="w-4 h-4" />}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Browse Image Files
-                </Button>
-              </div>
+              {modalMode === 'upload' ? (
+                <div className="space-y-5">
+                  {/* Dropzone for user file upload */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-mono font-semibold uppercase text-slate-700 tracking-wider">
+                        Upload Packaging Label Image
+                      </label>
+                      <span className="text-[11px] font-mono text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Live Gemini 2.5 Vision
+                      </span>
+                    </div>
+                    <FileDropzone
+                      onFileSelect={handleCustomFileUpload}
+                      label="Drop label photo here or click to browse"
+                      sublabel="Upload JPEG, PNG, or WebP photo of the packaging surface. Real label text will be extracted automatically."
+                    />
+                  </div>
 
-              {/* Inspection Guidelines */}
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-                  <Info className="w-4 h-4 text-blue-800 shrink-0" />
-                  <span>Guidelines for Accurate Statutory Verification:</span>
+                  {/* Action Buttons: Camera Capture and File Browse */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      className="w-full justify-center"
+                      leftIcon={<Camera className="w-4 h-4 text-blue-700" />}
+                      onClick={() => cameraInputRef.current?.click()}
+                    >
+                      Take Photo with Camera
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full justify-center"
+                      leftIcon={<Upload className="w-4 h-4" />}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Browse Image Files
+                    </Button>
+                  </div>
+
+                  {/* Inspection Guidelines */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                      <Info className="w-4 h-4 text-blue-800 shrink-0" />
+                      <span>Guidelines for Accurate Statutory Verification:</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600">
+                      <div className="flex items-start gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Include the Principal Display Panel (PDP) clearly</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Ensure MRP and Net Quantity numerals are legible</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Avoid direct flash reflection or heavy lens glare</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Capture manufacturer name & complete address panel</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600">
-                  <div className="flex items-start gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Include the Principal Display Panel (PDP) clearly</span>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Ensure MRP and Net Quantity numerals are legible</span>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Avoid direct flash reflection or heavy lens glare</span>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Capture manufacturer name & complete address panel</span>
+              ) : (
+                /* Sample Pre-loaded Cases Grid */
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-600">
+                    Select a curated statutory commodity sample to immediately simulate an inspection with full rule evaluation:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                    {SAMPLE_INSPECTIONS.map((sample) => (
+                      <div
+                        key={sample.id}
+                        onClick={() => handleSelectSample(sample)}
+                        className="p-3 border border-slate-200 hover:border-slate-400 bg-white hover:bg-slate-50 rounded-lg cursor-pointer transition-all flex flex-col justify-between group shadow-2xs"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {sample.category}
+                            </span>
+                            <span
+                              className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                sample.overallStatus === 'pass'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : sample.overallStatus === 'non_compliant'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {sample.overallStatus === 'pass'
+                                ? 'PASS'
+                                : sample.overallStatus === 'non_compliant'
+                                ? 'VIOLATION'
+                                : 'REVIEW'}
+                            </span>
+                          </div>
+                          <h5 className="text-xs font-bold text-slate-900 group-hover:text-blue-900 line-clamp-1">
+                            {sample.commodityName}
+                          </h5>
+                          <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                            {sample.brandName} • {sample.netQuantityDeclared}
+                          </p>
+                        </div>
+                        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                          <span>Score: {sample.complianceScore}/100</span>
+                          <span className="text-blue-700 font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                            Inspect <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div className="pt-2 flex justify-end gap-3 border-t border-slate-100">

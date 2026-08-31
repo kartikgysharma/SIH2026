@@ -22,6 +22,7 @@ import { InspectionReportModal } from './components/InspectionReportModal';
 import { InspectionReportView } from './components/report/InspectionReportView';
 import { InspectionHistoryView } from './components/history/InspectionHistoryView';
 import { DashboardView } from './components/dashboard/DashboardView';
+import { RuleMasterView } from './components/RuleMasterView';
 import { DesignSystemShowcase } from './components/DesignSystemShowcase';
 import {
   Scan,
@@ -52,12 +53,13 @@ import {
   History,
   FolderOpen,
   LayoutDashboard,
+  BookOpen,
 } from 'lucide-react';
 
 export default function App() {
   const [inspections, setInspections] = useState<InspectionSummary[]>(SAMPLE_INSPECTIONS);
   const [currentInspectionId, setCurrentInspectionId] = useState<string>(SAMPLE_INSPECTIONS[0].id);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inspections' | 'inspection' | 'human-review' | 'report' | 'design-system'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inspections' | 'inspection' | 'human-review' | 'report' | 'rule-master' | 'design-system'>('dashboard');
   const [userRole, setUserRole] = useState<UserRole>('inspector');
   const [selectedReviewInspectionId, setSelectedReviewInspectionId] = useState<string | null>(null);
   const [selectedReviewFindingId, setSelectedReviewFindingId] = useState<string | null>(null);
@@ -383,6 +385,22 @@ export default function App() {
               </button>
 
               <button
+                id="nav-tab-rules"
+                onClick={() => {
+                  setActiveTab('rule-master');
+                  setDetailFindingId(null);
+                }}
+                className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 ${
+                  activeTab === 'rule-master'
+                    ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[#0B2545]" />
+                <span>Rule Master</span>
+              </button>
+
+              <button
                 id="nav-tab-report"
                 onClick={() => setActiveTab('report')}
                 className={`px-3 py-1.5 rounded transition-all flex items-center gap-1.5 ${
@@ -500,6 +518,21 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => {
+              setActiveTab('rule-master');
+              setDetailFindingId(null);
+            }}
+            className={`px-2.5 py-1 rounded font-medium whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'rule-master'
+                ? 'bg-white text-slate-950 font-bold border border-slate-300 shadow-2xs'
+                : 'text-slate-600'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#0B2545]" />
+            <span>Rules</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('report')}
             className={`px-2.5 py-1 rounded font-medium whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'report'
@@ -591,6 +624,7 @@ export default function App() {
             }}
             onViewAllInspections={() => setActiveTab('inspections')}
             onViewReviewQueue={() => setActiveTab('human-review')}
+            onViewRules={() => setActiveTab('rule-master')}
             onReviewFinding={(inspId, findingId) => {
               setSelectedReviewInspectionId(inspId);
               setSelectedReviewFindingId(findingId || null);
@@ -612,6 +646,14 @@ export default function App() {
               setActiveTab('report');
             }}
             onScanNew={() => setIsScanModalOpen(true)}
+          />
+        ) : activeTab === 'rule-master' ? (
+          /* Statutory Rule Master & Legal Compendium View */
+          <RuleMasterView
+            onScanNewRule={() => setIsScanModalOpen(true)}
+            onOpenInspectionSample={() => {
+              setActiveTab('inspection');
+            }}
           />
         ) : activeTab === 'design-system' ? (
           <DesignSystemShowcase />

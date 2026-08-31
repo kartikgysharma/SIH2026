@@ -1,12 +1,13 @@
 import React from 'react';
 import { Button } from '../../design-system/Button';
-import { Scan, History, FileText, Sparkles, Inbox } from 'lucide-react';
+import { Scan, History, FileText, Sparkles, Inbox, BookOpen } from 'lucide-react';
 
 interface QuickActionsProps {
   onScanProduct: () => void;
   onViewInspections: () => void;
   onViewReports: () => void;
   onViewReviewQueue: () => void;
+  onViewRules?: () => void;
 }
 
 export const QuickActions: React.FC<QuickActionsProps> = ({
@@ -14,6 +15,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   onViewInspections,
   onViewReports,
   onViewReviewQueue,
+  onViewRules,
 }) => {
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-2xs space-y-3">
@@ -35,6 +37,19 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         >
           Scan Product
         </Button>
+
+        {/* Rule Master Quick Access */}
+        {onViewRules && (
+          <Button
+            variant="secondary"
+            size="md"
+            leftIcon={<BookOpen className="w-4 h-4 text-[#0B2545]" />}
+            onClick={onViewRules}
+            className="font-semibold"
+          >
+            Statutory Rule Master
+          </Button>
+        )}
 
         {/* Secondary: View Inspections */}
         <Button
@@ -69,3 +84,4 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
     </div>
   );
 };
+
