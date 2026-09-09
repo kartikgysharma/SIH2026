@@ -7,6 +7,7 @@ import { ProductImage } from './ProductImage';
 import { ComplianceCheckTable } from './ComplianceCheckTable';
 import { FindingSection } from './FindingSection';
 import { EvidenceSection } from './EvidenceSection';
+import { TamperingReportSection } from './TamperingReportSection';
 import { RuleReference } from './RuleReference';
 import { ReviewInformation } from './ReviewInformation';
 import { AuditTimeline } from './AuditTimeline';
@@ -64,6 +65,9 @@ export const InspectionReportView: React.FC<InspectionReportViewProps> = ({
 
         {/* 7. Evidence Dossier Section */}
         <EvidenceSection inspection={inspection} />
+
+        {/* 7b. Possible Tampering / Over-Sticker Assessment */}
+        <TamperingReportSection inspection={inspection} />
 
         {/* 8. Statutory Rule References */}
         <RuleReference inspection={inspection} />

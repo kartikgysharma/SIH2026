@@ -5,6 +5,8 @@ import {
   ComplianceFinding,
   ComplianceStatus,
   UserRole,
+  TamperingReviewStatus,
+  ReferenceComparisonResult,
 } from './types';
 import { Badge } from './design-system/Badge';
 import { Button } from './design-system/Button';
@@ -24,11 +26,13 @@ import { InspectionHistoryView } from './components/history/InspectionHistoryVie
 import { DashboardView } from './components/dashboard/DashboardView';
 import { RuleMasterView } from './components/RuleMasterView';
 import { DesignSystemShowcase } from './components/DesignSystemShowcase';
+import { TamperingSection } from './components/tampering/TamperingSection';
 import {
   Scan,
   FileCheck2,
   Scale,
   ShieldCheck,
+  ShieldAlert,
   AlertTriangle,
   FileText,
   Search,
@@ -206,6 +210,49 @@ export default function App() {
     setDetailFindingId(null);
   };
 
+  // Record inspector decision for label tampering / over-sticker detection
+  const handleRecordTamperingDecision = (
+    detectionId: string,
+    decision: TamperingReviewStatus,
+    notes: string
+  ) => {
+    setInspections((prev) =>
+      prev.map((insp) => {
+        if (insp.id !== activeInspection.id) return insp;
+        const updatedTampering = (insp.tamperingDetections || []).map((t) => {
+          if (t.id === detectionId) {
+            return {
+              ...t,
+              inspectorDecision: decision,
+              inspectorNotes: notes,
+              reviewedAt: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST',
+              reviewedBy: userRole === 'senior_inspector' ? 'Senior Metrology Officer' : 'Field Inspector',
+            };
+          }
+          return t;
+        });
+
+        return {
+          ...insp,
+          tamperingDetections: updatedTampering,
+        };
+      })
+    );
+  };
+
+  // Save reference comparison result onto active inspection
+  const handleSaveComparison = (comparisonResult: ReferenceComparisonResult) => {
+    setInspections((prev) =>
+      prev.map((insp) => {
+        if (insp.id !== activeInspection.id) return insp;
+        return {
+          ...insp,
+          referenceComparison: comparisonResult,
+        };
+      })
+    );
+  };
+
   // Filter findings based on category and search
   const filteredFindings = activeInspection.findings.filter((f) => {
     if (findingFilter === 'violations' && f.status !== 'non_compliant') return false;
@@ -224,15 +271,29 @@ export default function App() {
     return true;
   });
 
-  // Prepare bounding box overlays for image viewer
-  const imageBoundingBoxes = activeInspection.fields
-    .filter((f) => f.boundingBox)
-    .map((f) => ({
-      id: f.id,
-      box: f.boundingBox!,
-      status: f.status,
-      text: f.extractedValue,
-    }));
+  // Prepare bounding box overlays for image viewer (fields + tampering evidence regions)
+  const imageBoundingBoxes = [
+    ...activeInspection.fields
+      .filter((f) => f.boundingBox)
+      .map((f) => ({
+        id: f.id,
+        box: f.boundingBox!,
+        status: f.status,
+        text: f.extractedValue,
+      })),
+    ...(activeInspection.tamperingDetections || []).map((t) => ({
+      id: t.id,
+      box: {
+        x: t.evidenceRegion.x,
+        y: t.evidenceRegion.y,
+        width: t.evidenceRegion.width,
+        height: t.evidenceRegion.height,
+        label: `Possible Over-Sticker: ${t.affectedField}`,
+      },
+      status: 'review_required' as const,
+      text: `[REVIEW REQUIRED] Possible Over-Sticker: ${t.affectedField}`,
+    })),
+  ];
 
   // Declaration table columns
   const declarationColumns: Column<any>[] = [
@@ -779,10 +840,28 @@ export default function App() {
                   totalRules={activeInspection.totalRulesEvaluated}
                 />
 
-                {/* Sub-Tabs: Findings vs Mandatory Declarations Table */}
+                {/* Sub-Tabs: Findings vs Tampering / Over-Sticker vs Mandatory Declarations */}
                 <div className="space-y-4">
+                  {/* Over-Sticker Detection Callout if Flagged */}
+                  {(activeInspection.tamperingDetections?.length || 0) > 0 && viewSubTab !== 'tampering' && (
+                    <div
+                      onClick={() => setViewSubTab('tampering')}
+                      className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex items-center justify-between cursor-pointer hover:bg-amber-100/70 transition-colors shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                        <div className="text-xs text-amber-950">
+                          <strong>Possible Over-Sticker Flagged:</strong> {activeInspection.tamperingDetections?.length} suspicious overlay region(s) detected for human review ({activeInspection.tamperingDetections?.map(t => t.affectedField).join(', ')}).
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold font-mono text-amber-900 underline underline-offset-2 shrink-0">
+                        Review Evidence &rarr;
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={() => setViewSubTab('findings')}
                         className={`text-xs font-bold uppercase tracking-wider font-mono pb-2 -mb-2.5 transition-colors border-b-2 ${
@@ -793,6 +872,24 @@ export default function App() {
                       >
                         Potential Findings &amp; Evidence ({activeInspection.findings.length})
                       </button>
+
+                      <button
+                        onClick={() => setViewSubTab('tampering')}
+                        className={`text-xs font-bold uppercase tracking-wider font-mono pb-2 -mb-2.5 transition-colors border-b-2 flex items-center gap-1.5 ${
+                          viewSubTab === 'tampering'
+                            ? 'border-amber-600 text-amber-950 font-extrabold'
+                            : 'border-transparent text-slate-500 hover:text-slate-900'
+                        }`}
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Possible Tampering / Over-Sticker</span>
+                        {(activeInspection.tamperingDetections?.length || 0) > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-200 text-amber-900 font-extrabold font-mono">
+                            {activeInspection.tamperingDetections?.length}
+                          </span>
+                        )}
+                      </button>
+
                       <button
                         onClick={() => setViewSubTab('declarations')}
                         className={`text-xs font-bold uppercase tracking-wider font-mono pb-2 -mb-2.5 transition-colors border-b-2 ${
@@ -841,6 +938,16 @@ export default function App() {
                         ))
                       )}
                     </div>
+                  )}
+
+                  {/* Sub-Tab View: Label Tampering / Over-Sticker Detection */}
+                  {viewSubTab === 'tampering' && (
+                    <TamperingSection
+                      inspection={activeInspection}
+                      onRecordDecision={handleRecordTamperingDecision}
+                      onSaveComparison={handleSaveComparison}
+                      isReadOnly={userRole === 'auditor'}
+                    />
                   )}
 
                   {/* Sub-Tab View 2: High-Density Declarations Table */}

@@ -333,6 +333,26 @@ export const SAMPLE_INSPECTIONS: InspectionSummary[] = [
         evidenceRegion: { x: 7, y: 67, width: 86, height: 6, label: 'Consumer Care' },
       },
     ],
+    tamperingDetections: [
+      {
+        id: 'tamp-2026-001-1',
+        status: 'REVIEW_REQUIRED',
+        issueType: 'POSSIBLE_LABEL_TAMPERING',
+        affectedField: 'Maximum Retail Price (MRP)',
+        confidence: 0.88,
+        indicators: [
+          'possible sticker boundary',
+          'surface difference',
+          'text region partially covered',
+          'adhesive border seam line'
+        ],
+        evidenceRegion: { x: 9.5, y: 48.5, width: 81, height: 6.5 },
+        message: 'Possible over-sticker detected around the MRP declaration. Visual seam and substrate color discontinuity identified. Human verification required.',
+        underlyingTextVisible: false,
+        underlyingTextNote: 'Underlying text is not visible in the supplied image.',
+        inspectorDecision: 'PENDING',
+      },
+    ],
   },
   {
     id: 'insp-2026-004',

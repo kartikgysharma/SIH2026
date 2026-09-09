@@ -1,9 +1,10 @@
-import express, { Request, Response } from "express";
+import express from "express";
+import type { Request, Response } from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
-import { extractLabelFromImage } from "./server/geminiExtraction";
-import { evaluateInspectionCompliance } from "./server/complianceEngine";
+import { extractLabelFromImage } from "./server/geminiExtraction.ts";
+import { evaluateInspectionCompliance } from "./server/complianceEngine.ts";
 
 dotenv.config();
 
@@ -55,7 +56,7 @@ async function startServer() {
       }
 
       console.log("[4] Image successfully verified on backend. Forwarding to Gemini Vision...");
-      console.log("[5] Gemini request started (Model: gemini-3.7-flash)");
+      console.log("[5] Gemini vision request started (prioritizing fast vision models: gemini-3.1-flash-lite / gemini-3.8-flash with LOW thinking)...");
 
       const rawExtraction = await extractLabelFromImage(image, mimeType);
 
@@ -130,18 +131,64 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development vs static build for production
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+  // Robust production vs development static handling
+  const candidateDistDirs = [
+    path.join(process.cwd(), "dist"),
+    process.cwd(),
+    typeof __dirname !== "undefined" ? __dirname : "",
+    typeof __dirname !== "undefined" ? path.join(__dirname, "dist") : "",
+    typeof __dirname !== "undefined" ? path.resolve(__dirname, "..", "dist") : "",
+  ].filter(Boolean);
+
+  let staticDistPath: string | null = null;
+  for (const dir of candidateDistDirs) {
+    if (fs.existsSync(path.join(dir, "index.html"))) {
+      staticDistPath = dir;
+      break;
+    }
+  }
+
+  const isCompiledBundle = typeof __filename !== "undefined" && __filename.endsWith(".cjs");
+  const isProduction =
+    isCompiledBundle ||
+    process.env.NODE_ENV === "production" ||
+    (staticDistPath !== null && process.env.NODE_ENV !== "development");
+
+  if (!isProduction) {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("[Server] Vite middleware mounted for development mode");
+    } catch (err) {
+      console.warn("[Server] Vite dev server failed to load, falling back to static assets:", err);
+      if (staticDistPath) {
+        app.use(express.static(staticDistPath));
+        app.get("*", (_req: Request, res: Response) => {
+          res.sendFile(path.join(staticDistPath!, "index.html"));
+        });
+      }
+    }
+  } else if (staticDistPath) {
+    console.log(`[Server] Serving static production files from: ${staticDistPath}`);
+    app.use(express.static(staticDistPath));
     app.get("*", (_req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(path.join(staticDistPath!, "index.html"));
+    });
+  } else {
+    console.warn("[Server] Dist path with index.html not found, using fallback");
+    const fallbackPath = path.join(process.cwd(), "dist");
+    app.use(express.static(fallbackPath));
+    app.get("*", (_req: Request, res: Response) => {
+      const fallbackFile = path.join(fallbackPath, "index.html");
+      if (fs.existsSync(fallbackFile)) {
+        res.sendFile(fallbackFile);
+      } else {
+        res.status(200).send("BharatLabel AI Compliance Platform is running.");
+      }
     });
   }
 

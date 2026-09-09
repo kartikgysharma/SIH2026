@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 // Self-contained types for Vercel Serverless runtime
 export interface RawExtractionResult {
@@ -18,6 +18,21 @@ export interface RawExtractionResult {
   consumer_care: { value: string | null; phone: string | null; email: string | null; address: string | null; confidence: number | null; evidence: string | null };
   fssai_license_number: { value: string | null; confidence: number | null; evidence: string | null };
   other_declarations: Array<{ label: string; value: string; evidence: string }>;
+  possible_tampering_detections?: Array<{
+    affected_field: string;
+    has_possible_oversticker: boolean;
+    confidence: number | null;
+    indicators: string[];
+    evidence_region: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null;
+    message: string;
+    underlying_text_visible: boolean;
+    underlying_text_note: string;
+  }>;
   image_quality: { is_usable: boolean; quality_issue: string | null; blur_detected: boolean; glare_detected: boolean; text_legible: boolean };
   overall_extraction_confidence: number | null;
 }
@@ -37,6 +52,17 @@ STRICT EXTRACTION RULES:
 6. For every extracted field, provide the exact verbatim "evidence" string found on the label.
 7. Under "image_quality", check if the image is readable. If it is severely blurred, pitch black, unreadable, or does not contain a packaged commodity label, set "is_usable" to false and describe the "quality_issue".
 8. DO NOT make legal compliance decisions. Your sole job is accurate textual and visual extraction from the image.
+9. LABEL TAMPERING & OVER-STICKER DETECTION:
+Carefully inspect the image for visual indicators that a label declaration has been covered, modified, or replaced by an over-sticker, sticker patch, tape, or printed overlay.
+Visual indicators include:
+- Rectangular or irregular sticker boundaries or border seams
+- Sudden changes in color, texture, or substrate sheen/gloss
+- Surface inconsistencies, elevated edges, or shadows along sticker borders
+- Text appearing on a visually distinct surface/overlay
+- Important declarations (MRP, Net Quantity, Dates, Manufacturer Details, Consumer Care) being partially or fully obscured
+CAUTIOUS LANGUAGE: Always use cautious terminology ('Possible Over-Sticker', 'Possible Label Tampering', 'Suspicious Overlay', 'Review Required'). NEVER state 'Fraud Confirmed' or 'Tampering Confirmed'.
+UNDERLYING TEXT: A standard RGB photograph cannot reliably recover text hidden underneath an opaque sticker. If the original text is not visible, DO NOT guess or hallucinate it. Set "underlying_text_visible" to false and "underlying_text_note" to "Underlying text is not visible in the supplied image."
+If no over-sticker is detected, return an empty array [] for "possible_tampering_detections".
 
 Output must strictly be valid JSON matching this schema:
 {
@@ -56,6 +82,18 @@ Output must strictly be valid JSON matching this schema:
   "consumer_care": { "value": string | null, "phone": string | null, "email": string | null, "address": string | null, "confidence": number (0-1) | null, "evidence": string | null },
   "fssai_license_number": { "value": string | null, "confidence": number (0-1) | null, "evidence": string | null },
   "other_declarations": [ { "label": string, "value": string, "evidence": string } ],
+  "possible_tampering_detections": [
+    {
+      "affected_field": string,
+      "has_possible_oversticker": boolean,
+      "confidence": number (0-1) | null,
+      "indicators": [string],
+      "evidence_region": { "x": number, "y": number, "width": number, "height": number } | null,
+      "message": string,
+      "underlying_text_visible": boolean,
+      "underlying_text_note": string
+    }
+  ],
   "image_quality": { "is_usable": boolean, "quality_issue": string | null, "blur_detected": boolean, "glare_detected": boolean, "text_legible": boolean },
   "overall_extraction_confidence": number (0-1) | null
 }`;
@@ -116,8 +154,8 @@ async function extractLabelWithGemini(
 
   const candidateModels = [
     "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
     "gemini-3.7-flash",
-    "gemini-3.1-pro-preview",
     "gemini-flash-latest",
   ];
 
@@ -134,6 +172,7 @@ async function extractLabelWithGemini(
             systemInstruction: EXTRACTION_SYSTEM_PROMPT,
             responseMimeType: "application/json",
             temperature: 0.1,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           },
         });
 
@@ -147,20 +186,31 @@ async function extractLabelWithGemini(
       } catch (err: any) {
         lastError = err;
         const errString = String(err?.message || err);
-        const isRetryable =
+        const isHighDemandOrUnavailable =
           errString.includes("503") ||
           errString.includes("UNAVAILABLE") ||
-          errString.includes("high demand") ||
+          errString.includes("high demand");
+        const isRateLimited =
           errString.includes("429") ||
-          errString.includes("RESOURCE_EXHAUSTED");
+          errString.includes("RESOURCE_EXHAUSTED") ||
+          errString.includes("quota");
+        const isNotFoundOrDeprecated =
+          errString.includes("404") ||
+          errString.includes("NOT_FOUND") ||
+          errString.includes("no longer available");
 
         console.warn(
           `[Gemini Attempt ${attempt} on ${model} failed]:`,
           errString.slice(0, 180)
         );
 
-        if (isRetryable && attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+        if (isHighDemandOrUnavailable || isRateLimited || isNotFoundOrDeprecated) {
+          console.log(`[Failover] Model ${model} is unavailable or exhausted. Failing over immediately to next model candidate.`);
+          break;
+        }
+
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
         } else {
           break;
         }
@@ -705,6 +755,71 @@ function evaluateCompliance(
     });
   }
 
+  // Label Tampering / Over-Sticker Evaluation
+  const rawTampering = (raw.possible_tampering_detections || []).filter(
+    (d) => d.has_possible_oversticker
+  );
+
+  const tamperingDetections = rawTampering.map((t, idx) => {
+    const region = t.evidence_region || { x: 25, y: 35, width: 50, height: 18 };
+    return {
+      id: `tamp-${Date.now()}-${idx + 1}`,
+      status: "REVIEW_REQUIRED",
+      issueType: "POSSIBLE_LABEL_TAMPERING",
+      affectedField: t.affected_field || "MRP / Statutory Declaration",
+      confidence: cleanConfidence(t.confidence),
+      indicators:
+        t.indicators && t.indicators.length > 0
+          ? t.indicators
+          : ["possible sticker boundary", "surface difference", "text region partially covered"],
+      evidenceRegion: region,
+      message:
+        t.message ||
+        `Possible over-sticker detected around the ${t.affected_field || "declaration"}. Human verification required.`,
+      underlyingTextVisible: Boolean(t.underlying_text_visible),
+      underlyingTextNote: t.underlying_text_visible
+        ? t.underlying_text_note || "Partially visible"
+        : "Underlying text is not visible in the supplied image.",
+      inspectorDecision: "PENDING",
+    };
+  });
+
+  if (tamperingDetections.length > 0) {
+    tamperingDetections.forEach((td, idx) => {
+      findings.push({
+        id: `find-tamper-${idx + 1}`,
+        ruleCode: "LMPC-R23-TAMPER",
+        ruleTitle: `Possible Over-Sticker / Overlay: ${td.affectedField}`,
+        legalAct: "LMPC Rules 2011 - Rule 23(1) & General Provisions",
+        category: "lmpc_mandatory",
+        status: "review_required",
+        severity: "medium",
+        whatWasObserved: `Visual indicators suggest a possible sticker or overlay near ${td.affectedField}. Indicators: ${td.indicators.join(", ")}.`,
+        whyFlagged:
+          "Visual characteristics such as boundary seams, elevated edges, or substrate differences were detected. Under statutory guidelines, possible overlays require physical verification by an authorized inspector.",
+        extractedEvidence: td.message,
+        recommendedAction:
+          "Inspect physical container. Verify whether the overlay is an authorized manufacturer correction or an unauthorized over-sticker. Confirm, Reject, or Mark as Uncertain.",
+        analyzedField: td.affectedField,
+        detectedValue: "Possible Over-Sticker Flagged",
+        confidence: td.confidence,
+        deterministicRule:
+          "Statutory declarations must not be deceptively covered, modified, or altered by unverified overlays without authorized re-declaration.",
+        reasoning:
+          "Visual indicators warrant review to distinguish between authorized label corrections and non-compliant alterations.",
+        ruleId: "RULE-LMPC-TAMPER-REVIEW",
+        ruleName: "Label Over-Sticker & Overlay Verification",
+        ruleSource: "Legal Metrology Department",
+        ruleReference: "Rule 23(1), Packaged Commodities Rules 2011",
+        ruleStatus: "Active",
+        hasReliableRegion: true,
+        uncertaintyReason: td.underlyingTextVisible
+          ? undefined
+          : "Underlying text is not visible in the supplied image.",
+      });
+    });
+  }
+
   const passCount = findings.filter((f) => f.status === "pass").length;
   const nonCompliantCount = findings.filter((f) => f.status === "non_compliant").length;
   const reviewRequiredCount = findings.filter((f) => f.status === "review_required").length;
@@ -756,6 +871,7 @@ function evaluateCompliance(
     imageUrl,
     fields,
     findings,
+    tamperingDetections,
     reportNotes: `Inspected under the Legal Metrology (Packaged Commodities) Rules, 2011 and FSSAI statutory regulations. Extraction performed from high-resolution visual label image.`,
   };
 }

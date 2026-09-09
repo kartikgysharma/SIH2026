@@ -112,17 +112,16 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     const targetLabel = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || 'Uploaded Packaging Label';
     setAnalyzingTargetName(targetLabel);
     setActiveStep('analyzing');
-    setPipelineStage(0);
-
-    // Start progress stage visual progression
-    stageIntervalRef.current = setInterval(() => {
-      setPipelineStage((prev) => (prev < 2 ? prev + 1 : prev));
-    }, 1200);
+    setPipelineStage(0); // Stage 0: Label Preprocessing & Optical Clarity Check
 
     try {
-      // Optimize image before sending to prevent serverless body size limits on Vercel
+      // Step 1: Client-side preprocessing & dimension optimization
       const optimized = await optimizeImageForAnalysis(file);
       console.log(`[3] Optimized size: ~${Math.round(optimized.optimizedSizeBytes / 1024)} KB (${optimized.width}x${optimized.height}px)`);
+
+      // Advance to Stage 1: Gemini Multimodal Vision Extraction
+      // This stage accurately remains active during the backend AI vision request
+      setPipelineStage(1);
 
       console.log('[4] Image successfully prepared and sent to backend (/api/analyze-label)');
       console.log('[5] Gemini request started...');
@@ -154,29 +153,27 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       } else {
         const rawText = await response.text();
         console.warn(`[Non-JSON API Response] Status: ${response.status}, Body preview:`, rawText.slice(0, 300));
-        
-        if (stageIntervalRef.current) clearInterval(stageIntervalRef.current);
 
         let customCode = 'SERVER_ERROR';
         let customMessage = 'Server returned an unexpected response.';
 
         if (response.status === 404) {
           customCode = 'API_ROUTE_NOT_FOUND';
-          customMessage = 'The inspection API route (/api/analyze-label) was not found on this deployment. Please ensure Vercel Serverless Functions are deployed.';
+          customMessage = 'The inspection API route (/api/analyze-label) was not found on this deployment.';
         } else if (response.status === 413) {
           customCode = 'PAYLOAD_TOO_LARGE';
           customMessage = 'The uploaded image exceeds the platform payload limit. Please upload a smaller photo.';
         } else if (response.status === 401) {
           customCode = 'API_KEY_ERROR';
-          customMessage = 'GEMINI_API_KEY is missing or invalid in Vercel Project Settings -> Environment Variables.';
+          customMessage = 'GEMINI_API_KEY is missing or invalid on the server.';
         } else if (response.status === 500) {
           customCode = 'API_KEY_ERROR';
-          customMessage = 'Server error on Vercel. Please ensure GEMINI_API_KEY is added under Vercel Project Settings -> Environment Variables and redeployed.';
+          customMessage = 'Server error during extraction. Please verify GEMINI_API_KEY and retry.';
         } else if (response.status === 504) {
           customCode = 'GATEWAY_TIMEOUT';
           customMessage = 'The vision extraction timed out. Please retry with a clear, well-lit photo.';
         } else {
-          customMessage = `Server error (HTTP ${response.status}). Please check GEMINI_API_KEY in Vercel settings.`;
+          customMessage = `Server error (HTTP ${response.status}).`;
         }
 
         setErrorCode(customCode);
@@ -186,13 +183,12 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       }
 
       if (!response.ok || !result?.success) {
-        if (stageIntervalRef.current) clearInterval(stageIntervalRef.current);
         const err = result?.error;
         console.error('[API Error] Backend returned error:', err);
         setErrorCode(err?.code || (response.status === 401 ? 'API_KEY_ERROR' : 'ANALYSIS_FAILED'));
         setErrorMessage(
           err?.message ||
-            'Unable to analyze this image. Please check image quality and verify GEMINI_API_KEY in Vercel settings.'
+            'Unable to analyze this image. Please check image quality and retry.'
         );
         setActiveStep('error');
         return;
@@ -202,15 +198,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       console.log('[7] Structured JSON parsed');
       console.log(`[8] Extracted fields returned to frontend for "${result.inspection.commodityName}"`);
 
-      // Complete stages
-      setPipelineStage(3);
+      // Backend has completed extraction and deterministic statutory evaluations.
+      // Transition immediately through completion without artificial stalling:
+      setPipelineStage(4);
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
-      setTimeout(() => {
-        if (stageIntervalRef.current) clearInterval(stageIntervalRef.current);
-        onInspectionReady(result.inspection);
-        resetModalState();
-        onClose();
-      }, 500);
+      onInspectionReady(result.inspection);
+      resetModalState();
+      onClose();
     } catch (err: any) {
       if (stageIntervalRef.current) clearInterval(stageIntervalRef.current);
       console.error('[Network Error] Failed to complete analysis:', err);

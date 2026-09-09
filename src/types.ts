@@ -138,6 +138,55 @@ export interface InspectionSummary {
   priority?: 'high' | 'medium' | 'low';
   assignedReviewer?: string;
   lastReviewedAt?: string;
+
+  // Label Tampering / Over-Sticker Detections
+  tamperingDetections?: TamperingDetectionResult[];
+  referenceComparison?: ReferenceComparisonResult;
+}
+
+export type TamperingReviewStatus = 'CONFIRMED' | 'REJECTED' | 'UNCERTAIN' | 'PENDING';
+
+export interface TamperingEvidenceRegion {
+  x: number; // percentage (0-100) or pixel
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface TamperingDetectionResult {
+  id: string;
+  status: 'REVIEW_REQUIRED';
+  issueType: 'POSSIBLE_LABEL_TAMPERING';
+  affectedField: string; // e.g. "MRP", "Net Quantity", "Date of Packaging / Expiry", "Manufacturer Details"
+  confidence: number; // e.g. 0.86 (0 - 1)
+  indicators: string[]; // e.g. ["possible sticker boundary", "surface difference", "text region partially covered"]
+  evidenceRegion: TamperingEvidenceRegion;
+  message: string; // Cautious message
+  underlyingTextVisible: boolean;
+  underlyingTextNote: string; // e.g. "Underlying text is not visible in the supplied image."
+  evidenceImageUrl?: string;
+  inspectorDecision?: TamperingReviewStatus;
+  inspectorNotes?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface ReferenceComparisonDiscrepancy {
+  id: string;
+  field: string;
+  referenceValue: string;
+  inspectionValue: string;
+  discrepancyType: 'CHANGED_VALUE' | 'MISMATCHED_SUBSTRATE' | 'OVERSTICKER_OVERLAY' | 'MISSING_IN_SAMPLE';
+  evidenceNote: string;
+  status: 'REVIEW_REQUIRED' | 'MATCH' | 'DISCREPANCY';
+}
+
+export interface ReferenceComparisonResult {
+  referenceImageUrl: string;
+  referenceName: string;
+  comparedAt: string;
+  similarityScore: number; // percentage
+  differencesDetected: ReferenceComparisonDiscrepancy[];
 }
 
 export interface ReviewQueueItem {
@@ -161,7 +210,7 @@ export interface ReviewQueueItem {
   hasReliableRegion: boolean;
 }
 
-export type ActiveTab = 'dashboard' | 'inspections' | 'inspection' | 'human-review' | 'report' | 'design-system';
+export type ActiveTab = 'dashboard' | 'inspections' | 'inspection' | 'human-review' | 'rule-master' | 'report' | 'design-system';
 
 export type DashboardDateRange = 'all' | 'today' | 'last_7_days' | 'last_30_days' | 'custom';
 
