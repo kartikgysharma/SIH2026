@@ -161,19 +161,43 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error("[Vercel Handler Error]:", error?.message || error);
 
-    const errorMessage = error?.message || "An unexpected error occurred during package analysis.";
+    const rawError = error?.message || String(error || "");
     const isApiKeyError =
-      errorMessage.toLowerCase().includes("api_key") ||
-      errorMessage.toLowerCase().includes("gemini_api_key") ||
-      errorMessage.toLowerCase().includes("key is missing");
+      rawError.toLowerCase().includes("api_key") ||
+      rawError.toLowerCase().includes("gemini_api_key") ||
+      rawError.toLowerCase().includes("google_api_key") ||
+      rawError.toLowerCase().includes("key is missing") ||
+      rawError.toLowerCase().includes("not configured") ||
+      rawError.includes("API key not valid") ||
+      rawError.includes("API_KEY_INVALID");
 
-    return respondJson(res, isApiKeyError ? 401 : 500, {
+    const isQuotaOrRateLimit =
+      rawError.includes("429") ||
+      rawError.includes("RESOURCE_EXHAUSTED") ||
+      rawError.toLowerCase().includes("quota");
+
+    let statusCode = 500;
+    let errorCode = "ANALYSIS_FAILED";
+    let userMessage = rawError || "An unexpected error occurred during package analysis.";
+
+    if (isApiKeyError) {
+      statusCode = 401;
+      errorCode = "API_KEY_ERROR";
+      userMessage =
+        "The API Key (GEMINI_API_KEY) in your Vercel Environment Variables is missing or invalid. Please check your Vercel Project Settings > Environment Variables, save the key, and Redeploy.";
+    } else if (isQuotaOrRateLimit) {
+      statusCode = 429;
+      errorCode = "RATE_LIMIT_EXCEEDED";
+      userMessage =
+        "The upstream vision processing quota was temporarily exceeded. Please retry in a few moments.";
+    }
+
+    return respondJson(res, statusCode, {
       success: false,
       error: {
-        code: isApiKeyError ? "API_KEY_ERROR" : "ANALYSIS_FAILED",
-        message: isApiKeyError
-          ? "GEMINI_API_KEY is not configured in Vercel Environment Variables. Please configure GEMINI_API_KEY in your Vercel Project Settings."
-          : errorMessage,
+        code: errorCode,
+        message: userMessage,
+        details: rawError,
       },
     });
   }
