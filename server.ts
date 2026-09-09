@@ -3,8 +3,8 @@ import type { Request, Response } from "express";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
-import { extractLabelFromImage } from "./server/geminiExtraction.ts";
-import { evaluateInspectionCompliance } from "./server/complianceEngine.ts";
+import { extractLabelFromImage, extractMultiSidePackage, type InputPackageImage } from "./server/geminiExtraction.ts";
+import { evaluateInspectionCompliance, evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "./server/complianceEngine.ts";
 
 dotenv.config();
 
@@ -21,80 +21,99 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Label Analysis Endpoint using Gemini Vision
+  // Label Analysis Endpoint using Gemini Vision (supports single or multi-image packages)
   app.post("/api/analyze-label", async (req: Request, res: Response) => {
     try {
-      const { image, mimeType = "image/jpeg", fileName, inspectorName, location } = req.body;
+      const {
+        images,
+        image,
+        mimeType = "image/jpeg",
+        fileName,
+        side = "Front",
+        inspectorName = "Field Metrology Officer",
+        location = "Field Inspection Unit",
+      } = req.body;
 
-      console.log("[1] Label analysis request received");
+      console.log("[1] Package inspection request received");
 
-      if (!image || typeof image !== "string") {
+      // Normalize images into an array of package sides
+      let rawImageItems: Array<{
+        id: string;
+        side: string;
+        base64Data: string;
+        mimeType?: string;
+        fileName?: string;
+      }> = [];
+
+      if (Array.isArray(images) && images.length > 0) {
+        rawImageItems = images.map((img: any, idx: number) => ({
+          id: img.id || `img_${idx + 1}`,
+          side: img.side || (idx === 0 ? "Front" : "Other"),
+          base64Data: img.base64Data || img.image || img.dataUrl || "",
+          mimeType: img.mimeType || "image/jpeg",
+          fileName: img.fileName || `package_side_${idx + 1}.jpg`,
+        }));
+      } else if (image && typeof image === "string") {
+        rawImageItems = [
+          {
+            id: "img_1",
+            side: side || "Front",
+            base64Data: image,
+            mimeType: mimeType || "image/jpeg",
+            fileName: fileName || "package_front.jpg",
+          },
+        ];
+      }
+
+      // Filter out any empty payload items
+      const validImages: InputPackageImage[] = rawImageItems.filter(
+        (img) => img.base64Data && img.base64Data.length > 50
+      );
+
+      if (validImages.length === 0) {
         console.warn("[Validation] Missing or invalid image payload in request");
         res.status(400).json({
           success: false,
           error: {
             code: "INVALID_IMAGE_PAYLOAD",
-            message: "A valid base64 image payload is required for label analysis.",
+            message: "At least one valid packaging image payload is required for inspection.",
           },
         });
         return;
       }
 
-      console.log(`[2] Image MIME type: ${mimeType}`);
-      const payloadSizeBytes = Math.round((image.length * 3) / 4);
-      console.log(`[3] Image payload size: ~${Math.round(payloadSizeBytes / 1024)} KB`);
+      console.log(`[2] Processing ${validImages.length} package image(s): ${validImages.map((v) => v.side).join(", ")}`);
 
-      if (payloadSizeBytes < 100) {
-        res.status(400).json({
-          success: false,
-          error: {
-            code: "IMAGE_CORRUPTED",
-            message: "Uploaded image appears empty or corrupted. Please provide a clear packaging image.",
-          },
-        });
-        return;
-      }
+      // Extract all sides concurrently using Gemini Vision
+      const sideResults = await extractMultiSidePackage(validImages);
 
-      console.log("[4] Image successfully verified on backend. Forwarding to Gemini Vision...");
-      console.log("[5] Gemini vision request started (prioritizing fast vision models: gemini-3.1-flash-lite / gemini-3.8-flash with LOW thinking)...");
+      console.log(`[3] Gemini responses received for all ${sideResults.length} package image(s)`);
 
-      const rawExtraction = await extractLabelFromImage(image, mimeType);
-
-      console.log("[6] Gemini response received successfully");
-      console.log("[7] Structured JSON parsed and validated");
-
-      // Check image quality evaluation from Gemini
-      if (rawExtraction.image_quality && rawExtraction.image_quality.is_usable === false) {
-        console.warn(`[Quality Alert] Image unusable: ${rawExtraction.image_quality.quality_issue}`);
-        res.status(422).json({
-          success: false,
-          error: {
-            code: "IMAGE_QUALITY_INSUFFICIENT",
-            message:
-              rawExtraction.image_quality.quality_issue ||
-              "Image quality is insufficient for reliable extraction. The label text could not be clearly resolved.",
-          },
-        });
-        return;
-      }
+      // Prepare inputs for deterministic compliance engine
+      const complianceInputs: ExtractedSideInput[] = sideResults.map((sr) => ({
+        imageId: sr.imageId,
+        side: sr.side,
+        fileName: sr.fileName,
+        imageUrl: sr.imageUrl,
+        extraction: sr.extraction,
+      }));
 
       // Execute Deterministic Compliance Engine on real extracted data
-      const inspection = evaluateInspectionCompliance(
-        rawExtraction,
-        image.startsWith("data:") ? image : `data:${mimeType};base64,${image}`,
-        fileName,
+      const inspection = evaluateMultiImageInspectionCompliance(
+        complianceInputs,
         inspectorName,
         undefined,
-        location
+        location,
+        validImages[0]?.fileName
       );
 
-      console.log(`[8] Extracted fields & findings calculated for commodity: "${inspection.commodityName}"`);
+      console.log(`[4] Inspection compiled: "${inspection.commodityName}" - Score: ${inspection.complianceScore}% - Overall: ${inspection.overallStatus} (Conflicts: ${inspection.hasDeclarationConflicts ? "YES" : "NO"})`);
 
       res.json({
         success: true,
         inspectionId: inspection.id,
         inspection,
-        extraction: rawExtraction,
+        extractions: sideResults.map((s) => ({ imageId: s.imageId, side: s.side, extraction: s.extraction })),
       });
     } catch (error: any) {
       console.error("[Error] Label extraction failed:", error?.message || error);
@@ -124,7 +143,7 @@ async function startServer() {
         error: {
           code: errorCode,
           message: isApiKeyError
-            ? "Gemini API key is not configured or invalid on the server."
+            ? "Vision analysis service key is not configured or invalid on the server."
             : errorMessage,
         },
       });

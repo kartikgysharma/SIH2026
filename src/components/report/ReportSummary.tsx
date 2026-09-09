@@ -1,6 +1,6 @@
 import React from 'react';
 import { InspectionSummary, ComplianceStatus } from '../../types';
-import { CheckCircle2, AlertTriangle, HelpCircle, ShieldCheck, AlertOctagon } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, HelpCircle, ShieldCheck, AlertOctagon, Layers } from 'lucide-react';
 
 interface ReportSummaryProps {
   inspection: InspectionSummary;
@@ -18,7 +18,11 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
     reviewRequiredCount,
     totalRulesEvaluated,
     overallStatus,
+    hasDeclarationConflicts,
+    packageImages,
   } = inspection;
+
+  const imageCount = packageImages?.length || 1;
 
   // Final Assessment Status Terminology
   let finalStatusTitle = 'Assessment Passed';
@@ -27,7 +31,13 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
   let finalStatusDesc =
     'All evaluated statutory declarations conform to active Legal Metrology rules with high optical confidence.';
 
-  if (overallStatus === 'non_compliant' || nonCompliantCount > 0) {
+  if (hasDeclarationConflicts) {
+    finalStatusTitle = 'Possible Declaration Conflict';
+    finalStatusClass = 'bg-amber-50 text-amber-950 border-amber-400 ring-1 ring-amber-300';
+    FinalStatusIcon = AlertTriangle;
+    finalStatusDesc =
+      'Inconsistent statutory declarations detected across uploaded package sides. Rule 6 of LMPC 2011 prohibits conflicting declarations.';
+  } else if (overallStatus === 'non_compliant' || nonCompliantCount > 0) {
     finalStatusTitle = 'Potential Issues Detected';
     finalStatusClass = 'bg-rose-50 text-rose-950 border-rose-300';
     FinalStatusIcon = AlertOctagon;
@@ -36,7 +46,7 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
     finalStatusTitle = 'Review Required';
     finalStatusClass = 'bg-amber-50 text-amber-950 border-amber-300';
     FinalStatusIcon = AlertTriangle;
-    finalStatusDesc = `${reviewRequiredCount} declaration(s) have borderline confidence or physical curvature factors requiring manual inspector verification.`;
+    finalStatusDesc = `${reviewRequiredCount} declaration(s) have borderline confidence, missing particulars, or physical curvature factors requiring manual inspector verification.`;
   }
 
   return (
@@ -47,9 +57,14 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
           <ShieldCheck className="w-4 h-4 text-[#0B2545]" />
           <span>1. Executive Summary &amp; Assessment Score</span>
         </h2>
-        <span className="text-[11px] font-mono text-slate-500 font-semibold">
-          {totalRulesEvaluated} Statutory Rules Evaluated
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono text-slate-500 font-semibold">
+            {totalRulesEvaluated} Statutory Rules Evaluated
+          </span>
+          <span className="text-[11px] font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+            {imageCount} Package Side{imageCount === 1 ? '' : 's'}
+          </span>
+        </div>
       </div>
 
       {/* Main Score & Breakdown Grid */}
@@ -69,7 +84,7 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
           </div>
 
           <div className="border-t border-slate-800 pt-2 text-[11px] text-slate-300 leading-relaxed">
-            <strong className="text-amber-300 font-mono">Notice:</strong> This index reflects automated optical extraction and deterministic legal metrology rule scoring. It is an <span className="underline decoration-slate-600">AI-assisted assessment aid</span>, not a statutory certification.
+            <strong className="text-amber-300 font-mono">Notice:</strong> This index reflects automated optical extraction across all uploaded package sides and deterministic legal metrology rule scoring. It is an <span className="underline decoration-slate-600">AI-assisted assessment aid</span>, not a statutory certification.
           </div>
         </div>
 
@@ -118,6 +133,21 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Declaration Conflict Prominent Banner (if any) */}
+      {hasDeclarationConflicts && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-3.5 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+          <div className="space-y-1 text-xs">
+            <div className="font-mono font-extrabold uppercase text-amber-950 tracking-wider">
+              Possible Declaration Conflict Detected Across Package Sides
+            </div>
+            <p className="text-slate-700 leading-relaxed text-[11px]">
+              The system identified conflicting statutory values (such as differing MRP or Net Quantity declarations) between different uploaded panels of this single package. Under Rule 6 and Rule 23 of the Legal Metrology (Packaged Commodities) Rules 2011, contradictory declarations are strictly flagged for enforcement review. Both panel images are documented below.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Overall Assessment Status Banner */}
       <div className={`border rounded p-3 flex items-start gap-3 ${finalStatusClass}`}>

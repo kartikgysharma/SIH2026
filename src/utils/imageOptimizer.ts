@@ -15,8 +15,8 @@ export interface OptimizedImageResult {
 
 export async function optimizeImageForAnalysis(
   file: File,
-  maxDimension = 1280,
-  quality = 0.80
+  maxDimension = 900,
+  quality = 0.72
 ): Promise<OptimizedImageResult> {
   const originalSizeBytes = file.size;
 
@@ -58,12 +58,12 @@ export async function optimizeImageForAnalysis(
           return;
         }
 
-        // Draw with high quality interpolation
+        // Draw with high quality interpolation for crisp text retention
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to high-quality JPEG
+        // Convert to optimized high-compression JPEG
         const optimizedBase64 = canvas.toDataURL('image/jpeg', quality);
         const approxSize = Math.round((optimizedBase64.length * 3) / 4);
 
@@ -77,7 +77,7 @@ export async function optimizeImageForAnalysis(
         });
       };
 
-      img.onerror = (err) => {
+      img.onerror = () => {
         reject(new Error('Failed to load image for processing.'));
       };
 

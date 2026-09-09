@@ -4,6 +4,31 @@ export type ReviewWorkflowStatus = 'pending_review' | 'in_review' | 'reviewed' |
 
 export type UserRole = 'inspector' | 'reviewer' | 'admin';
 
+export type PackageSide =
+  | 'Front'
+  | 'Back'
+  | 'Left Side'
+  | 'Right Side'
+  | 'Top'
+  | 'Bottom'
+  | 'Other';
+
+export interface PackageImage {
+  id: string; // e.g. "img_1", "img_front"
+  url: string; // base64 or URL
+  side: PackageSide; // e.g. 'Front', 'Back', 'Left Side', etc.
+  fileName?: string;
+  uploadedAt?: string;
+  isPrimary?: boolean;
+  quality?: {
+    isUsable: boolean;
+    blurDetected?: boolean;
+    glareDetected?: boolean;
+    textLegible?: boolean;
+    issue?: string | null;
+  };
+}
+
 export type RuleCategory = 
   | 'lmpc_mandatory' // Legal Metrology (Packaged Commodities) Rules, 2011
   | 'fssai_food_safety' // Food Safety and Standards Authority of India
@@ -32,6 +57,17 @@ export interface ExtractedField {
   status: ComplianceStatus;
   boundingBox?: BoundingBox;
   notes?: string;
+  sourceImageId?: string; // Source package image ID
+  side?: PackageSide | string; // Package side where declaration was detected
+  sourceImageUrl?: string;
+  hasConflict?: boolean; // True if this declaration conflicts across images
+  conflictingDeclarations?: Array<{
+    sourceImageId: string;
+    side: PackageSide | string;
+    value: string;
+    confidence?: number;
+    imageUrl?: string;
+  }>;
 }
 
 export interface ReviewAuditEntry {
@@ -85,6 +121,19 @@ export interface ComplianceFinding {
   boundingBoxId?: string;
   evidenceRegion?: BoundingBox;
   
+  // Multi-Image Package Traceability
+  sourceImageId?: string; // ID of the package image this finding originated from
+  side?: PackageSide | string; // Package side e.g. "Front", "Back", "Left Side"
+  sourceImageUrl?: string; // Direct image URL for this finding
+  hasConflict?: boolean; // True if this finding flags a declaration conflict between sides
+  conflictingDeclarations?: Array<{
+    sourceImageId: string;
+    side: PackageSide | string;
+    value: string;
+    confidence?: number;
+    imageUrl?: string;
+  }>;
+  
   // State-specific explanation
   uncertaintyReason?: string; // For review_required
   passVerificationNote?: string; // For pass
@@ -133,6 +182,10 @@ export interface InspectionSummary {
   findings: ComplianceFinding[];
   reportNotes?: string;
   
+  // Multi-Image Package Support (Single Inspection ID)
+  packageImages?: PackageImage[];
+  hasDeclarationConflicts?: boolean;
+  
   // Human Review Workflow metadata
   reviewStatus?: ReviewWorkflowStatus;
   priority?: 'high' | 'medium' | 'low';
@@ -165,6 +218,8 @@ export interface TamperingDetectionResult {
   underlyingTextVisible: boolean;
   underlyingTextNote: string; // e.g. "Underlying text is not visible in the supplied image."
   evidenceImageUrl?: string;
+  imageId?: string; // ID of the source package image (e.g. "img_2")
+  side?: PackageSide | string; // Side of package where tampering was detected (e.g. "Right Side", "Back")
   inspectorDecision?: TamperingReviewStatus;
   inspectorNotes?: string;
   reviewedAt?: string;

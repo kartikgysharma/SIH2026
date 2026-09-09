@@ -382,7 +382,8 @@ Output must strictly be valid JSON matching this schema:
 
 export async function extractLabelFromImage(
   base64Data: string,
-  mimeType: string = "image/jpeg"
+  mimeType: string = "image/jpeg",
+  side?: string
 ): Promise<RawExtractionResult> {
   const ai = getAiClient();
 
@@ -395,84 +396,75 @@ export async function extractLabelFromImage(
     },
   };
 
+  const sideDescriptor = side && side !== "Other" ? ` representing the [${side}] side/panel of the package` : "";
   const textPart = {
-    text: "Extract all visible packaged commodity declarations, text blocks, and label particulars from this packaging image according to the system instructions. Remember: DO NOT GUESS. If not visible, return null.",
+    text: `Extract all visible packaged commodity declarations, text blocks, and label particulars from this packaging image${sideDescriptor} according to the system instructions. Remember: DO NOT GUESS. If not visible, return null.`,
   };
 
-  // Supported model candidates with fallback priority (prioritizing fast, high-availability flash vision models)
+  // Supported model candidates prioritizing fastest ultra-low latency vision models
   const candidateModels = [
+    "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite",
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-flash-latest",
+    "gemini-3.5-flash-lite",
   ];
 
   let lastError: any = null;
 
   for (const model of candidateModels) {
-    // Attempt extraction on candidate model
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        console.log(`[Extraction Attempt] Model: ${model}, Attempt: ${attempt}`);
-        const response = await ai.models.generateContent({
-          model,
-          contents: { parts: [imagePart, textPart] },
-          config: {
-            systemInstruction: EXTRACTION_SYSTEM_PROMPT,
-            responseMimeType: "application/json",
-            temperature: 0.1, // low temperature for precise factual extraction
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          },
-        });
+    try {
+      console.log(`[Extraction Attempt] Model: ${model}`);
 
-        const responseText = response.text;
-        if (!responseText) {
-          throw new Error("Empty response received from Gemini Vision model");
-        }
+      // High-speed JSON OCR extraction without thinking latency overhead
+      const config: any = {
+        systemInstruction: EXTRACTION_SYSTEM_PROMPT,
+        responseMimeType: "application/json",
+        temperature: 0.1,
+        maxOutputTokens: 1536,
+      };
 
-        const parsedJson = JSON.parse(responseText.trim());
-        const normalized = normalizeRawExtraction(parsedJson);
-        return normalized;
-      } catch (err: any) {
-        lastError = err;
-        const errString = String(err?.message || err);
-        const isHighDemandOrUnavailable =
-          errString.includes("503") ||
-          errString.includes("UNAVAILABLE") ||
-          errString.includes("high demand");
-        const isRateLimited =
-          errString.includes("429") ||
-          errString.includes("RESOURCE_EXHAUSTED") ||
-          errString.includes("quota");
-        const isNotFoundOrDeprecated =
-          errString.includes("404") ||
-          errString.includes("NOT_FOUND") ||
-          errString.includes("no longer available");
+      const response = await ai.models.generateContent({
+        model,
+        contents: { parts: [imagePart, textPart] },
+        config,
+      });
 
-        console.warn(
-          `[Extraction Warning] Attempt ${attempt} on ${model} failed (${isHighDemandOrUnavailable ? "high-demand" : isRateLimited ? "rate-limited" : isNotFoundOrDeprecated ? "deprecated" : "error"}):`,
-          errString.slice(0, 200)
-        );
-
-        // If the model is experiencing high demand (503), rate-limiting (429), or is deprecated (404),
-        // fail over immediately to the next candidate model to avoid stalling the user.
-        if (isHighDemandOrUnavailable || isRateLimited || isNotFoundOrDeprecated) {
-          console.log(`[Failover] Model ${model} is unavailable or exhausted. Failing over immediately to next model candidate.`);
-          break;
-        }
-
-        if (attempt < 2) {
-          // Brief 300ms micro-pause before single retry for transient socket errors
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        } else {
-          break;
-        }
+      const responseText = response.text;
+      if (!responseText) {
+        throw new Error("Empty response received from vision model");
       }
+
+      const parsedJson = JSON.parse(responseText.trim());
+      const normalized = normalizeRawExtraction(parsedJson);
+      console.log(`[Extraction Success] Completed rapidly using ${model}`);
+      return normalized;
+    } catch (err: any) {
+      lastError = err;
+      const errString = String(err?.message || err);
+      const isHighDemandOrUnavailable =
+        errString.includes("503") ||
+        errString.includes("UNAVAILABLE") ||
+        errString.includes("high demand");
+      const isRateLimited =
+        errString.includes("429") ||
+        errString.includes("RESOURCE_EXHAUSTED") ||
+        errString.includes("quota");
+      const isNotFoundOrDeprecated =
+        errString.includes("404") ||
+        errString.includes("NOT_FOUND") ||
+        errString.includes("no longer available");
+
+      console.warn(
+        `[Extraction Warning] Model ${model} failed (${isHighDemandOrUnavailable ? "high-demand" : isRateLimited ? "rate-limited" : isNotFoundOrDeprecated ? "deprecated" : "error"}):`,
+        errString.slice(0, 160)
+      );
+
+      // Immediately failover to next candidate model to keep scan latency minimal
+      continue;
     }
   }
 
-  // If all candidate models and retries failed, parse and rethrow with clean message
-  let cleanMsg = "AI Vision service is temporarily experiencing high load. Please try again.";
+  // If all candidate models failed, parse and rethrow with clean, brand-neutral message
+  let cleanMsg = "Vision analysis service is temporarily experiencing high load. Please try again.";
   if (lastError) {
     try {
       const rawMsg = lastError.message || String(lastError);
@@ -482,7 +474,7 @@ export async function extractLabelFromImage(
           cleanMsg = parsed.error.message;
         }
       } else if (rawMsg.includes("503") || rawMsg.includes("high demand")) {
-        cleanMsg = "Gemini Vision service is experiencing temporary high traffic. Please retry in a few moments.";
+        cleanMsg = "Vision analysis service is experiencing temporary high traffic. Please retry in a few moments.";
       } else {
         cleanMsg = rawMsg;
       }
@@ -493,3 +485,96 @@ export async function extractLabelFromImage(
 
   throw new Error(cleanMsg);
 }
+
+export interface InputPackageImage {
+  id: string;
+  side: string;
+  base64Data: string;
+  mimeType?: string;
+  fileName?: string;
+}
+
+export interface ExtractedPackageSideResult {
+  imageId: string;
+  side: string;
+  fileName?: string;
+  imageUrl: string;
+  extraction: RawExtractionResult;
+  error?: string;
+}
+
+/**
+ * Concurrently extracts packaging declarations from multiple package images
+ * (e.g. Front, Back, Left Side, Right Side, etc.)
+ */
+export async function extractMultiSidePackage(
+  images: InputPackageImage[]
+): Promise<ExtractedPackageSideResult[]> {
+  if (!images || images.length === 0) {
+    throw new Error("No package images provided for inspection.");
+  }
+
+  console.log(`[Multi-Image Extraction] Starting extraction for ${images.length} package image(s)...`);
+
+  const promises = images.map(async (img, idx) => {
+    const mime = img.mimeType || "image/jpeg";
+    const cleanUrl = img.base64Data.startsWith("data:")
+      ? img.base64Data
+      : `data:${mime};base64,${img.base64Data}`;
+
+    try {
+      console.log(`[Multi-Image Extraction] Image #${idx + 1} (${img.side || "View"}) - initiating Gemini Vision...`);
+      const extraction = await extractLabelFromImage(img.base64Data, mime, img.side);
+      console.log(`[Multi-Image Extraction] Image #${idx + 1} (${img.side || "View"}) - extraction complete.`);
+      return {
+        imageId: img.id || `img_${idx + 1}`,
+        side: img.side || (idx === 0 ? "Front" : "Other"),
+        fileName: img.fileName || `package_image_${idx + 1}.jpg`,
+        imageUrl: cleanUrl,
+        extraction,
+      };
+    } catch (err: any) {
+      console.error(`[Multi-Image Extraction] Failed for image #${idx + 1} (${img.side}):`, err?.message || err);
+      // Fallback empty extraction with unusable flag so other images can still proceed
+      const fallbackExtraction: RawExtractionResult = {
+        product_name: { value: null, confidence: null, evidence: null },
+        brand_name: { value: null, confidence: null, evidence: null },
+        generic_name: { value: null, confidence: null, evidence: null },
+        category: { value: null, confidence: null, evidence: null },
+        net_quantity: { value: null, raw_numeral: null, raw_unit: null, confidence: null, evidence: null },
+        mrp: { value: null, raw_amount: null, includes_taxes: null, confidence: null, evidence: null },
+        unit_sale_price: { value: null, confidence: null, evidence: null },
+        manufacturer: { name: null, address: null, full_declaration: null, confidence: null, evidence: null },
+        packer: { name: null, address: null, full_declaration: null, confidence: null, evidence: null },
+        importer: { name: null, address: null, full_declaration: null, confidence: null, evidence: null },
+        country_of_origin: { value: null, confidence: null, evidence: null },
+        date_information: { value: null, manufacturing_date: null, packaging_date: null, expiry_or_best_before: null, confidence: null, evidence: null },
+        batch_or_lot_number: { value: null, confidence: null, evidence: null },
+        consumer_care: { value: null, phone: null, email: null, address: null, confidence: null, evidence: null },
+        fssai_license_number: { value: null, confidence: null, evidence: null },
+        other_declarations: [],
+        possible_tampering_detections: [],
+        image_quality: {
+          is_usable: false,
+          quality_issue: err?.message || "Failed to extract declarations from this image",
+          blur_detected: false,
+          glare_detected: false,
+          text_legible: false,
+        },
+        overall_extraction_confidence: 0,
+      };
+      return {
+        imageId: img.id || `img_${idx + 1}`,
+        side: img.side || (idx === 0 ? "Front" : "Other"),
+        fileName: img.fileName || `package_image_${idx + 1}.jpg`,
+        imageUrl: cleanUrl,
+        extraction: fallbackExtraction,
+        error: err?.message || "Extraction failed",
+      };
+    }
+  });
+
+  const results = await Promise.all(promises);
+  return results;
+}
+
