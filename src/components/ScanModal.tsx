@@ -249,21 +249,25 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         try {
           result = JSON.parse(rawText);
         } catch {
-          // not json
+          result = { message: rawText.slice(0, 200) };
         }
       }
 
       if (!response.ok || !result?.success) {
         const err = result?.error;
         console.error('[API Error] Backend returned error:', err || result);
-        setErrorCode(err?.code || `HTTP_${response.status}`);
-        setErrorMessage(
+        const resolvedErrorCode =
+          err?.code || (result?.code ? String(result.code) : `HTTP_${response.status}`);
+        const resolvedErrorMessage =
           err?.message ||
-            result?.message ||
-            (response.status === 500
-              ? 'Server encountered an internal error during image processing. Please verify your API key and retry.'
-              : `Server returned an unexpected response (HTTP ${response.status}).`)
-        );
+          result?.message ||
+          err?.details ||
+          (response.status === 500
+            ? 'Server encountered an internal error during image processing. Please verify your API key and retry.'
+            : `Server returned an unexpected response (HTTP ${response.status}).`);
+
+        setErrorCode(resolvedErrorCode);
+        setErrorMessage(resolvedErrorMessage);
         setActiveStep('error');
         return;
       }

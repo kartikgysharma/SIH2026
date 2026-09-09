@@ -304,19 +304,16 @@ export function normalizeRawExtraction(parsed: any): RawExtractionResult {
 function getAiClient(): GoogleGenAI {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY or GOOGLE_API_KEY is not configured on the server");
+    throw new Error("GEMINI_API_KEY is not configured on the server. Please check your environment variables.");
   }
-  if (!aiClient) {
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build",
       },
-    });
-  }
-  return aiClient;
+    },
+  });
 }
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a specialized legal metrology vision extraction system analyzing a real packaged commodity label image.
@@ -403,11 +400,12 @@ export async function extractLabelFromImage(
 
   // Supported model candidates prioritizing fastest ultra-low latency vision models with broad production support
   const candidateModels = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-flash-lite-latest",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
     "gemini-3.1-flash-lite",
-    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
   ];
 
   let lastError: any = null;
