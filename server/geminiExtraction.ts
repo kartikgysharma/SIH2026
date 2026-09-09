@@ -401,8 +401,10 @@ export async function extractLabelFromImage(
     text: `Extract all visible packaged commodity declarations, text blocks, and label particulars from this packaging image${sideDescriptor} according to the system instructions. Remember: DO NOT GUESS. If not visible, return null.`,
   };
 
-  // Supported model candidates prioritizing fastest ultra-low latency vision models
+  // Supported model candidates prioritizing fastest ultra-low latency vision models with broad production support
   const candidateModels = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
     "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite",
     "gemini-3.5-flash-lite",

@@ -246,19 +246,23 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       } else {
         const rawText = await response.text();
         console.warn(`[Non-JSON Response] Status: ${response.status}:`, rawText.slice(0, 300));
-        setErrorCode('SERVER_ERROR');
-        setErrorMessage(`Server returned an unexpected response (HTTP ${response.status}).`);
-        setActiveStep('error');
-        return;
+        try {
+          result = JSON.parse(rawText);
+        } catch {
+          // not json
+        }
       }
 
       if (!response.ok || !result?.success) {
         const err = result?.error;
-        console.error('[API Error] Backend returned error:', err);
-        setErrorCode(err?.code || 'ANALYSIS_FAILED');
+        console.error('[API Error] Backend returned error:', err || result);
+        setErrorCode(err?.code || `HTTP_${response.status}`);
         setErrorMessage(
           err?.message ||
-            'Unable to analyze the package images. Please verify image clarity and retry.'
+            result?.message ||
+            (response.status === 500
+              ? 'Server encountered an internal error during image processing. Please verify your API key and retry.'
+              : `Server returned an unexpected response (HTTP ${response.status}).`)
         );
         setActiveStep('error');
         return;
