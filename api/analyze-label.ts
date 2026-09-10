@@ -1,5 +1,13 @@
-import { extractMultiSidePackage, type InputPackageImage } from "../server/geminiExtraction.ts";
-import { evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "../server/complianceEngine.ts";
+import { extractMultiSidePackage, type InputPackageImage } from "../server/geminiExtraction";
+import { evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "../server/complianceEngine";
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "25mb",
+    },
+  },
+};
 
 async function parseBody(req: any): Promise<any> {
   if (req.body && typeof req.body === "object") {

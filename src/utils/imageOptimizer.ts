@@ -15,8 +15,8 @@ export interface OptimizedImageResult {
 
 export async function optimizeImageForAnalysis(
   file: File,
-  maxDimension = 900,
-  quality = 0.72
+  maxDimension = 1280,
+  quality = 0.82
 ): Promise<OptimizedImageResult> {
   const originalSizeBytes = file.size;
 

@@ -3,8 +3,8 @@ import type { Request, Response } from "express";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
-import { extractLabelFromImage, extractMultiSidePackage, type InputPackageImage } from "./server/geminiExtraction.ts";
-import { evaluateInspectionCompliance, evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "./server/complianceEngine.ts";
+import { extractLabelFromImage, extractMultiSidePackage, type InputPackageImage } from "./server/geminiExtraction";
+import { evaluateInspectionCompliance, evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "./server/complianceEngine";
 
 dotenv.config();
 
@@ -16,13 +16,41 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+  // CORS Preflight Handler for API endpoints
+  app.options("/api/*", (_req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.sendStatus(200);
+  });
+
   // Health check endpoint
-  app.get("/api/health", (_req: Request, res: Response) => {
+  app.get(["/api/health", "/api/health/", "/api/health.ts"], (_req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   // Label Analysis Endpoint using Gemini Vision (supports single or multi-image packages)
-  app.post("/api/analyze-label", async (req: Request, res: Response) => {
+  app.all(["/api/analyze-label", "/api/analyze-label/", "/api/analyze-label.ts"], async (req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({
+        success: false,
+        error: {
+          code: "METHOD_NOT_ALLOWED",
+          message: "Only POST requests are supported for this endpoint.",
+        },
+      });
+      return;
+    }
     try {
       const {
         images,
@@ -148,6 +176,17 @@ async function startServer() {
         },
       });
     }
+  });
+
+  // Catch-all handler for unmatched /api/* endpoints to ensure JSON error response instead of index.html
+  app.all("/api/*", (_req: Request, res: Response) => {
+    res.status(404).json({
+      success: false,
+      error: {
+        code: "API_ENDPOINT_NOT_FOUND",
+        message: "The requested API endpoint does not exist on the server.",
+      },
+    });
   });
 
   // Robust production vs development static handling

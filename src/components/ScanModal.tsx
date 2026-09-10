@@ -207,7 +207,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         queuedImages.map(async (img) => {
           const opt = img.optimizedPromise
             ? await img.optimizedPromise
-            : await optimizeImageForAnalysis(img.file, 900, 0.72);
+            : await optimizeImageForAnalysis(img.file, 1280, 0.82);
           return {
             id: img.id,
             side: img.side,
@@ -249,7 +249,15 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         try {
           result = JSON.parse(rawText);
         } catch {
-          result = { message: rawText.slice(0, 200) };
+          // Received HTML page (e.g. index.html from SPA fallback) instead of JSON
+          result = {
+            success: false,
+            error: {
+              code: 'NON_JSON_RESPONSE',
+              message:
+                'The server returned an HTML fallback page instead of a JSON response. Please check backend API server configuration and route.',
+            },
+          };
         }
       }
 
