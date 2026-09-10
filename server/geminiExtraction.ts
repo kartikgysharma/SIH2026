@@ -395,7 +395,7 @@ export async function extractLabelFromImage(
 
   const sideDescriptor = side && side !== "Other" ? ` representing the [${side}] side/panel of the package` : "";
   const textPart = {
-    text: `Extract all visible packaged commodity declarations, text blocks, and label particulars from this packaging image${sideDescriptor} according to the system instructions. Remember: DO NOT GUESS. If not visible, return null.`,
+    text: `Extract all visible packaged commodity declarations, text blocks, and label particulars from this packaging image${sideDescriptor} according to the system instructions. Keep evidence quotes brief (max 10 words per field) to ensure complete, valid JSON output. Remember: DO NOT GUESS. If not visible, return null.`,
   };
 
   // Supported model candidates prioritizing fastest ultra-low latency vision models with broad production support
@@ -418,7 +418,7 @@ export async function extractLabelFromImage(
         systemInstruction: EXTRACTION_SYSTEM_PROMPT,
         responseMimeType: "application/json",
         temperature: 0.0,
-        maxOutputTokens: 1200,
+        maxOutputTokens: 4096,
         thinkingConfig: {
           thinkingBudget: 0,
         },
