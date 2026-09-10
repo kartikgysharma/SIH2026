@@ -1,4 +1,4 @@
-import { normalizeRawExtraction, type RawExtractionResult } from "./geminiExtraction.ts";
+import { normalizeRawExtraction, type RawExtractionResult } from "./geminiExtraction.js";
 import type {
   InspectionSummary,
   ExtractedField,
