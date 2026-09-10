@@ -1,5 +1,5 @@
-import { extractMultiSidePackage, type InputPackageImage } from "../server/geminiExtraction";
-import { evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "../server/complianceEngine";
+import { extractMultiSidePackage, type InputPackageImage } from "../server/geminiExtraction.js";
+import { evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "../server/complianceEngine.js";
 
 export const config = {
   api: {

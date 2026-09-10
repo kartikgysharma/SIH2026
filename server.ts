@@ -3,8 +3,8 @@ import type { Request, Response } from "express";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
-import { extractLabelFromImage, extractMultiSidePackage, type InputPackageImage } from "./server/geminiExtraction";
-import { evaluateInspectionCompliance, evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "./server/complianceEngine";
+import { extractLabelFromImage, extractMultiSidePackage, type InputPackageImage } from "./server/geminiExtraction.js";
+import { evaluateInspectionCompliance, evaluateMultiImageInspectionCompliance, type ExtractedSideInput } from "./server/complianceEngine.js";
 
 dotenv.config();
 
