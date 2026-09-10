@@ -400,12 +400,11 @@ export async function extractLabelFromImage(
 
   // Supported model candidates prioritizing fastest ultra-low latency vision models with broad production support
   const candidateModels = [
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.8-flash",
-    "gemini-flash-latest",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-lite-latest",
   ];
 
   let lastError: any = null;
@@ -418,8 +417,11 @@ export async function extractLabelFromImage(
       const config: any = {
         systemInstruction: EXTRACTION_SYSTEM_PROMPT,
         responseMimeType: "application/json",
-        temperature: 0.1,
-        maxOutputTokens: 1536,
+        temperature: 0.0,
+        maxOutputTokens: 1200,
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
       };
 
       const response = await ai.models.generateContent({
